@@ -160,39 +160,16 @@ def extract_embedding(image, model):
 
 def get_image_path(saved_path):
 
-    # Original path from image_paths.npy
-    if os.path.exists(saved_path):
-        return saved_path
+    # Get only the image filename
+    filename = os.path.basename(str(saved_path))
 
-    # If saved path starts with ./ 
-    cleaned_path = saved_path.lstrip("./")
-
-    if os.path.exists(cleaned_path):
-        return cleaned_path
-
-    # Try filename inside data/images
-    filename = os.path.basename(saved_path)
-
-    possible_path = os.path.join(
-        IMAGE_DIR,
-        filename
-    )
-
-    if os.path.exists(possible_path):
-        return possible_path
-
-    # Search all folders inside data/images
-    for root, _, files in os.walk(IMAGE_DIR):
+    # Search inside data/images recursively
+    for root, _, files in os.walk("data/images"):
 
         if filename in files:
-
-            return os.path.join(
-                root,
-                filename
-            )
+            return os.path.join(root, filename)
 
     return None
-
 
 # ==========================================
 # Load Resources
@@ -203,7 +180,9 @@ model = load_model()
 index = load_index()
 
 image_paths = load_image_paths()
-
+st.write("Number of image paths:", len(image_paths))
+st.write("First saved path:", image_paths[0])
+st.write("Images folder exists:", os.path.exists("data/images"))
 
 # ==========================================
 # UI
