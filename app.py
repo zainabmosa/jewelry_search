@@ -24,23 +24,9 @@ st.set_page_config(
 # Paths
 # ==========================================
 
-DATA_DIR = "data"
-
-MODEL_PATH = os.path.join(
-    DATA_DIR,
-    "mobilenetv2_embeddings.pth"
-)
-
-IMAGE_PATHS_PATH = os.path.join(
-    DATA_DIR,
-    "image_paths.npy"
-)
-
-FAISS_INDEX_PATH = os.path.join(
-    DATA_DIR,
-    "jewelry.index"
-)
-
+MODEL_PATH = "mobilenetv2_embeddings.pth"
+IMAGE_PATHS_PATH = "image_paths.npy"
+FAISS_INDEX_PATH = "jewelry.index"
 
 # ==========================================
 # Settings
