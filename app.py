@@ -28,11 +28,23 @@ MODEL_PATH = "mobilenetv2_embeddings.pth"
 IMAGE_PATHS_PATH = "image_paths.npy"
 FAISS_INDEX_PATH = "jewelry.index"
 
+IMAGE_DIR = os.path.join("data", "images")
+
+
 # ==========================================
-# Settings
+# Check Files
 # ==========================================
 
-TOP_K = 25
+required_files = [
+    MODEL_PATH,
+    IMAGE_PATHS_PATH,
+    FAISS_INDEX_PATH
+]
+
+for file_path in required_files:
+    if not os.path.exists(file_path):
+        st.error(f"File not found: {file_path}")
+        st.stop()
 
 
 # ==========================================
@@ -55,10 +67,8 @@ def load_model():
         weights=None
     )
 
-    # Remove classification head
     model.classifier = nn.Identity()
 
-    # Load saved weights
     model.load_state_dict(
         torch.load(
             MODEL_PATH,
@@ -67,7 +77,6 @@ def load_model():
     )
 
     model = model.to(device)
-
     model.eval()
 
     return model
@@ -104,24 +113,13 @@ def load_image_paths():
 
 transform = transforms.Compose([
 
-    transforms.Resize(
-        (224, 224)
-    ),
+    transforms.Resize((224, 224)),
 
     transforms.ToTensor(),
 
     transforms.Normalize(
-        mean=[
-            0.485,
-            0.456,
-            0.406
-        ],
-
-        std=[
-            0.229,
-            0.224,
-            0.225
-        ]
+        mean=[0.485, 0.456, 0.406],
+        std=[0.229, 0.224, 0.225]
     )
 ])
 
@@ -130,32 +128,19 @@ transform = transforms.Compose([
 # Extract Embedding
 # ==========================================
 
-def extract_embedding(
-    image,
-    model
-):
+def extract_embedding(image, model):
 
-    image = image.convert(
-        "RGB"
-    )
+    image = image.convert("RGB")
 
-    image = transform(
-        image
-    )
+    image = transform(image)
 
-    image = image.unsqueeze(
-        0
-    )
+    image = image.unsqueeze(0)
 
-    image = image.to(
-        device
-    )
+    image = image.to(device)
 
     with torch.no_grad():
 
-        embedding = model(
-            image
-        )
+        embedding = model(image)
 
     embedding = (
         embedding
@@ -164,11 +149,49 @@ def extract_embedding(
         .astype("float32")
     )
 
-    faiss.normalize_L2(
-        embedding
-    )
+    faiss.normalize_L2(embedding)
 
     return embedding
+
+
+# ==========================================
+# Fix Image Path
+# ==========================================
+
+def get_image_path(saved_path):
+
+    # Original path from image_paths.npy
+    if os.path.exists(saved_path):
+        return saved_path
+
+    # If saved path starts with ./ 
+    cleaned_path = saved_path.lstrip("./")
+
+    if os.path.exists(cleaned_path):
+        return cleaned_path
+
+    # Try filename inside data/images
+    filename = os.path.basename(saved_path)
+
+    possible_path = os.path.join(
+        IMAGE_DIR,
+        filename
+    )
+
+    if os.path.exists(possible_path):
+        return possible_path
+
+    # Search all folders inside data/images
+    for root, _, files in os.walk(IMAGE_DIR):
+
+        if filename in files:
+
+            return os.path.join(
+                root,
+                filename
+            )
+
+    return None
 
 
 # ==========================================
@@ -206,13 +229,9 @@ st.sidebar.header(
 
 threshold = st.sidebar.slider(
     "Similarity Threshold",
-
     min_value=0.0,
-
     max_value=1.0,
-
     value=0.55,
-
     step=0.05
 )
 
@@ -223,7 +242,6 @@ threshold = st.sidebar.slider(
 
 uploaded_file = st.file_uploader(
     "Upload a jewelry image",
-
     type=[
         "jpg",
         "jpeg",
@@ -268,8 +286,6 @@ if image_file is not None:
     ).convert("RGB")
 
 
-    # Show uploaded image
-
     st.subheader(
         "Your Image"
     )
@@ -280,19 +296,15 @@ if image_file is not None:
     )
 
 
-    # Extract embedding
-
     query_embedding = extract_embedding(
         query_image,
         model
     )
 
 
-    # Search Top 25
-
     similarities, indices = index.search(
         query_embedding,
-        TOP_K
+        25
     )
 
 
@@ -300,8 +312,6 @@ if image_file is not None:
 
     indices = indices[0]
 
-
-    # Apply threshold
 
     results = []
 
@@ -320,16 +330,10 @@ if image_file is not None:
             )
 
 
-    # ======================================
-    # Display Results
-    # ======================================
-
     if len(results) == 0:
 
         st.warning(
-            "No sufficiently similar jewelry "
-            "was found. Try another image "
-            "or lower the similarity threshold."
+            "No sufficiently similar jewelry was found."
         )
 
     else:
@@ -338,33 +342,36 @@ if image_file is not None:
             f"Top {len(results)} Similar Products"
         )
 
-        columns = st.columns(
-            5
-        )
+        columns = st.columns(5)
 
         for position, (
             similarity,
             image_index
         ) in enumerate(results):
 
-            with columns[
-                position % 5
-            ]:
+            with columns[position % 5]:
 
-                image_path = os.path.join(
-                    ".",
-                    image_paths[
-                        image_index
-                    ]
+                saved_path = image_paths[
+                    image_index
+                ]
+
+                image_path = get_image_path(
+                    saved_path
                 )
+
+                if image_path is None:
+
+                    st.error(
+                        f"Image not found: {saved_path}"
+                    )
+
+                    continue
 
                 try:
 
                     result_image = Image.open(
                         image_path
-                    ).convert(
-                        "RGB"
-                    )
+                    ).convert("RGB")
 
                     st.image(
                         result_image,
@@ -372,8 +379,7 @@ if image_file is not None:
                     )
 
                     st.caption(
-                        f"Similarity: "
-                        f"{similarity:.3f}"
+                        f"Similarity: {similarity:.3f}"
                     )
 
                 except Exception as e:
