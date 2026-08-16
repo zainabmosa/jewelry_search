@@ -28,11 +28,14 @@ MODEL_PATH = "mobilenetv2_embeddings.pth"
 IMAGE_PATHS_PATH = "image_paths.npy"
 FAISS_INDEX_PATH = "jewelry.index"
 
-IMAGE_DIR = os.path.join("data", "images")
+IMAGE_DIR = os.path.join(
+    "data",
+    "images"
+)
 
 
 # ==========================================
-# Check Files
+# Check Required Files
 # ==========================================
 
 required_files = [
@@ -42,8 +45,13 @@ required_files = [
 ]
 
 for file_path in required_files:
+
     if not os.path.exists(file_path):
-        st.error(f"File not found: {file_path}")
+
+        st.error(
+            f"File not found: {file_path}"
+        )
+
         st.stop()
 
 
@@ -52,7 +60,9 @@ for file_path in required_files:
 # ==========================================
 
 device = torch.device(
-    "cuda" if torch.cuda.is_available() else "cpu"
+    "cuda"
+    if torch.cuda.is_available()
+    else "cpu"
 )
 
 
@@ -77,6 +87,7 @@ def load_model():
     )
 
     model = model.to(device)
+
     model.eval()
 
     return model
@@ -113,13 +124,23 @@ def load_image_paths():
 
 transform = transforms.Compose([
 
-    transforms.Resize((224, 224)),
+    transforms.Resize(
+        (224, 224)
+    ),
 
     transforms.ToTensor(),
 
     transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225]
+        mean=[
+            0.485,
+            0.456,
+            0.406
+        ],
+        std=[
+            0.229,
+            0.224,
+            0.225
+        ]
     )
 ])
 
@@ -128,19 +149,32 @@ transform = transforms.Compose([
 # Extract Embedding
 # ==========================================
 
-def extract_embedding(image, model):
+def extract_embedding(
+    image,
+    model
+):
 
-    image = image.convert("RGB")
+    image = image.convert(
+        "RGB"
+    )
 
-    image = transform(image)
+    image = transform(
+        image
+    )
 
-    image = image.unsqueeze(0)
+    image = image.unsqueeze(
+        0
+    )
 
-    image = image.to(device)
+    image = image.to(
+        device
+    )
 
     with torch.no_grad():
 
-        embedding = model(image)
+        embedding = model(
+            image
+        )
 
     embedding = (
         embedding
@@ -149,40 +183,66 @@ def extract_embedding(image, model):
         .astype("float32")
     )
 
-    faiss.normalize_L2(embedding)
+    faiss.normalize_L2(
+        embedding
+    )
 
     return embedding
 
 
 # ==========================================
-# Fix Image Path
+# Find Image Path
 # ==========================================
 
-def get_image_path(saved_path):
+def get_image_path(
+    saved_path
+):
 
-    saved_path = str(saved_path)
+    saved_path = str(
+        saved_path
+    )
 
-    # Try the saved path first
-    if os.path.exists(saved_path):
+    # 1. Try original saved path
+    if os.path.exists(
+        saved_path
+    ):
+
         return saved_path
 
-    # Remove the extra Jewellery_Data folder
+
+    # 2. Remove Jewellery_Data
     fixed_path = saved_path.replace(
         "data/images/Jewellery_Data/",
         "data/images/"
     )
 
-    if os.path.exists(fixed_path):
+    if os.path.exists(
+        fixed_path
+    ):
+
         return fixed_path
 
-    # Final fallback: search by filename
-    filename = os.path.basename(saved_path)
 
-    for root, _, files in os.walk("data/images"):
+    # 3. Search by filename
+    filename = os.path.basename(
+        saved_path
+    )
+
+    for root, _, files in os.walk(
+        IMAGE_DIR
+    ):
+
         if filename in files:
-            return os.path.join(root, filename)
 
+            return os.path.join(
+                root,
+                filename
+            )
+
+
+    # 4. Image not found
     return None
+
 
 # ==========================================
 # Load Resources
@@ -192,7 +252,8 @@ model = load_model()
 
 index = load_index()
 
-image_path = get_image_path(saved_path)
+image_paths = load_image_paths()
+
 
 # ==========================================
 # UI
@@ -272,8 +333,14 @@ if image_file is not None:
 
     query_image = Image.open(
         image_file
-    ).convert("RGB")
+    ).convert(
+        "RGB"
+    )
 
+
+    # ======================================
+    # Show Uploaded Image
+    # ======================================
 
     st.subheader(
         "Your Image"
@@ -285,11 +352,19 @@ if image_file is not None:
     )
 
 
+    # ======================================
+    # Extract Query Embedding
+    # ======================================
+
     query_embedding = extract_embedding(
         query_image,
         model
     )
 
+
+    # ======================================
+    # Search Top 25
+    # ======================================
 
     similarities, indices = index.search(
         query_embedding,
@@ -301,6 +376,10 @@ if image_file is not None:
 
     indices = indices[0]
 
+
+    # ======================================
+    # Apply Threshold
+    # ======================================
 
     results = []
 
@@ -319,11 +398,17 @@ if image_file is not None:
             )
 
 
+    # ======================================
+    # Display Results
+    # ======================================
+
     if len(results) == 0:
 
         st.warning(
-            "No sufficiently similar jewelry was found."
+            "No sufficiently similar jewelry was found. "
+            "Try another image or lower the similarity threshold."
         )
+
 
     else:
 
@@ -331,23 +416,34 @@ if image_file is not None:
             f"Top {len(results)} Similar Products"
         )
 
-        columns = st.columns(5)
+
+        columns = st.columns(
+            5
+        )
+
 
         for position, (
             similarity,
             image_index
         ) in enumerate(results):
 
-            with columns[position % 5]:
+            with columns[
+                position % 5
+            ]:
 
+                # Get saved path
                 saved_path = image_paths[
                     image_index
                 ]
 
+
+                # Find actual image
                 image_path = get_image_path(
                     saved_path
                 )
 
+
+                # Image not found
                 if image_path is None:
 
                     st.error(
@@ -356,20 +452,28 @@ if image_file is not None:
 
                     continue
 
+
+                # Load and display image
                 try:
 
                     result_image = Image.open(
                         image_path
-                    ).convert("RGB")
+                    ).convert(
+                        "RGB"
+                    )
+
 
                     st.image(
                         result_image,
                         use_container_width=True
                     )
 
+
                     st.caption(
-                        f"Similarity: {similarity:.3f}"
+                        f"Similarity: "
+                        f"{similarity:.3f}"
                     )
+
 
                 except Exception as e:
 
