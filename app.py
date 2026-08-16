@@ -160,12 +160,25 @@ def extract_embedding(image, model):
 
 def get_image_path(saved_path):
 
-    # Get only the image filename
-    filename = os.path.basename(str(saved_path))
+    saved_path = str(saved_path)
 
-    # Search inside data/images recursively
+    # Try the saved path first
+    if os.path.exists(saved_path):
+        return saved_path
+
+    # Remove the extra Jewellery_Data folder
+    fixed_path = saved_path.replace(
+        "data/images/Jewellery_Data/",
+        "data/images/"
+    )
+
+    if os.path.exists(fixed_path):
+        return fixed_path
+
+    # Final fallback: search by filename
+    filename = os.path.basename(saved_path)
+
     for root, _, files in os.walk("data/images"):
-
         if filename in files:
             return os.path.join(root, filename)
 
@@ -179,10 +192,7 @@ model = load_model()
 
 index = load_index()
 
-image_paths = load_image_paths()
-st.write("Number of image paths:", len(image_paths))
-st.write("First saved path:", image_paths[0])
-st.write("Images folder exists:", os.path.exists("data/images"))
+image_path = get_image_path(saved_path)
 
 # ==========================================
 # UI
