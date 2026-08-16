@@ -212,8 +212,7 @@ Possible future improvements include:
 
 **Zainab Mohamed Moosa**
 
-University of Bahrain
-
+General Assembly
 ---
 
 ### ⭐ Project Summary
