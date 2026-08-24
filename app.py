@@ -1,482 +1,162 @@
 import os
+import io
 import numpy as np
+import streamlit as st
 import torch
 import torch.nn as nn
 import faiss
-import streamlit as st
 
-from torchvision import models, transforms
 from PIL import Image
-
-
-# ==========================================
-# Page Configuration
-# ==========================================
+from torchvision import models, transforms
 
 st.set_page_config(
-    page_title="Jewelry Visual Search",
+    page_title="Jewelry Finder",
     page_icon="💎",
     layout="wide"
 )
 
-
-# ==========================================
-# Paths
-# ==========================================
-
-MODEL_PATH = "mobilenetv2_embeddings.pth"
-IMAGE_PATHS_PATH = "image_paths.npy"
-FAISS_INDEX_PATH = "jewelry.index"
-
-IMAGE_DIR = os.path.join(
-    "data",
-    "images"
-)
+st.title("💎 Jewelry Visual Search")
+st.write("Upload a jewelry photo and find similar items from the catalog.")
 
 
-# ==========================================
-# Check Required Files
-# ==========================================
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(PROJECT_DIR, "data")
 
-required_files = [
-    MODEL_PATH,
-    IMAGE_PATHS_PATH,
-    FAISS_INDEX_PATH
-]
+TOP_K = 25
+THRESHOLD = 0.55
 
-for file_path in required_files:
-
-    if not os.path.exists(file_path):
-
-        st.error(
-            f"File not found: {file_path}"
-        )
-
-        st.stop()
-
-
-# ==========================================
-# Device
-# ==========================================
-
-device = torch.device(
-    "cuda"
-    if torch.cuda.is_available()
-    else "cpu"
-)
-
-
-# ==========================================
-# Load MobileNetV2
-# ==========================================
 
 @st.cache_resource
-def load_model():
+def load_search_engine():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model = models.mobilenet_v2(
-        weights=None
-    )
+    weights = models.MobileNet_V2_Weights.DEFAULT
+    model = models.mobilenet_v2(weights=weights)
 
+    # Remove the classification head
     model.classifier = nn.Identity()
 
-    model.load_state_dict(
-        torch.load(
-            MODEL_PATH,
-            map_location=device
-        )
-    )
-
     model = model.to(device)
-
     model.eval()
 
-    return model
+    transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
+    ])
+
+    embeddings_path = os.path.join(DATA_DIR, "embeddings.npy")
+    paths_path = os.path.join(DATA_DIR, "image_paths.npy")
+    index_path = os.path.join(DATA_DIR, "jewelry.index")
+
+    embeddings = np.load(embeddings_path)
+    image_paths = np.load(paths_path, allow_pickle=True)
+    index = faiss.read_index(index_path)
+
+    return model, transform, index, image_paths, device
 
 
-# ==========================================
-# Load FAISS Index
-# ==========================================
-
-@st.cache_resource
-def load_index():
-
-    return faiss.read_index(
-        FAISS_INDEX_PATH
-    )
-
-
-# ==========================================
-# Load Image Paths
-# ==========================================
-
-@st.cache_data
-def load_image_paths():
-
-    return np.load(
-        IMAGE_PATHS_PATH,
-        allow_pickle=True
-    ).tolist()
-
-
-# ==========================================
-# Image Preprocessing
-# ==========================================
-
-transform = transforms.Compose([
-
-    transforms.Resize(
-        (224, 224)
-    ),
-
-    transforms.ToTensor(),
-
-    transforms.Normalize(
-        mean=[
-            0.485,
-            0.456,
-            0.406
-        ],
-        std=[
-            0.229,
-            0.224,
-            0.225
-        ]
-    )
-])
-
-
-# ==========================================
-# Extract Embedding
-# ==========================================
-
-def extract_embedding(
-    image,
-    model
-):
-
-    image = image.convert(
-        "RGB"
-    )
-
-    image = transform(
-        image
-    )
-
-    image = image.unsqueeze(
-        0
-    )
-
-    image = image.to(
-        device
-    )
+def get_image_embedding(image, model, transform, device):
+    tensor = transform(image).unsqueeze(0).to(device)
 
     with torch.no_grad():
+        embedding = model(tensor).cpu().numpy().astype("float32")
 
-        embedding = model(
-            image
-        )
-
-    embedding = (
-        embedding
-        .cpu()
-        .numpy()
-        .astype("float32")
-    )
-
-    faiss.normalize_L2(
-        embedding
-    )
+    faiss.normalize_L2(embedding)
 
     return embedding
 
 
-# ==========================================
-# Find Image Path
-# ==========================================
+# Load model and search files
+try:
+    model, transform, index, image_paths, device = load_search_engine()
+except Exception as e:
+    st.error("Could not load the search files.")
+    st.code(str(e))
+    st.stop()
 
-def get_image_path(
-    saved_path
-):
 
-    saved_path = str(
-        saved_path
+tab1, tab2 = st.tabs(["📁 Upload Image", "📷 Use Camera"])
+
+with tab1:
+    uploaded_file = st.file_uploader(
+        "Choose a jewelry image",
+        type=["jpg", "jpeg", "png", "webp"]
     )
 
-    # 1. Try original saved path
-    if os.path.exists(
-        saved_path
-    ):
-
-        return saved_path
+with tab2:
+    camera_file = st.camera_input("Take a photo")
 
 
-    # 2. Remove Jewellery_Data
-    fixed_path = saved_path.replace(
-        "data/images/Jewellery_Data/",
-        "data/images/"
-    )
-
-    if os.path.exists(
-        fixed_path
-    ):
-
-        return fixed_path
+query_file = uploaded_file if uploaded_file is not None else camera_file
 
 
-    # 3. Search by filename
-    filename = os.path.basename(
-        saved_path
-    )
-
-    for root, _, files in os.walk(
-        IMAGE_DIR
-    ):
-
-        if filename in files:
-
-            return os.path.join(
-                root,
-                filename
-            )
-
-
-    # 4. Image not found
-    return None
-
-
-# ==========================================
-# Load Resources
-# ==========================================
-
-model = load_model()
-
-index = load_index()
-
-image_paths = load_image_paths()
-
-
-# ==========================================
-# UI
-# ==========================================
-
-st.title(
-    "💎 Jewelry Visual Search Engine"
-)
-
-st.write(
-    "Upload a jewelry image or use your camera "
-    "to find visually similar products."
-)
-
-
-# ==========================================
-# Sidebar
-# ==========================================
-
-st.sidebar.header(
-    "Search Settings"
-)
-
-threshold = st.sidebar.slider(
-    "Similarity Threshold",
-    min_value=0.0,
-    max_value=1.0,
-    value=0.55,
-    step=0.05
-)
-
-
-# ==========================================
-# Upload Image
-# ==========================================
-
-uploaded_file = st.file_uploader(
-    "Upload a jewelry image",
-    type=[
-        "jpg",
-        "jpeg",
-        "png",
-        "webp"
-    ]
-)
-
-
-# ==========================================
-# Camera
-# ==========================================
-
-camera_file = st.camera_input(
-    "Or take a photo"
-)
-
-
-# ==========================================
-# Select Input
-# ==========================================
-
-image_file = None
-
-if uploaded_file is not None:
-
-    image_file = uploaded_file
-
-elif camera_file is not None:
-
-    image_file = camera_file
-
-
-# ==========================================
-# Search
-# ==========================================
-
-if image_file is not None:
+if query_file is not None:
 
     query_image = Image.open(
-        image_file
-    ).convert(
-        "RGB"
-    )
+        io.BytesIO(query_file.getvalue())
+    ).convert("RGB")
 
+    st.subheader("Your Image")
+    st.image(query_image, width=300)
 
-    # ======================================
-    # Show Uploaded Image
-    # ======================================
+    if st.button("🔍 Find Similar Jewelry", use_container_width=True):
 
-    st.subheader(
-        "Your Image"
-    )
-
-    st.image(
-        query_image,
-        width=300
-    )
-
-
-    # ======================================
-    # Extract Query Embedding
-    # ======================================
-
-    query_embedding = extract_embedding(
-        query_image,
-        model
-    )
-
-
-    # ======================================
-    # Search Top 25
-    # ======================================
-
-    similarities, indices = index.search(
-        query_embedding,
-        25
-    )
-
-
-    similarities = similarities[0]
-
-    indices = indices[0]
-
-
-    # ======================================
-    # Apply Threshold
-    # ======================================
-
-    results = []
-
-    for similarity, image_index in zip(
-        similarities,
-        indices
-    ):
-
-        if similarity >= threshold:
-
-            results.append(
-                (
-                    float(similarity),
-                    int(image_index)
-                )
+        with st.spinner("Searching..."):
+            query_embedding = get_image_embedding(
+                query_image,
+                model,
+                transform,
+                device
             )
 
+            similarities, indices = index.search(
+                query_embedding,
+                TOP_K
+            )
 
-    # ======================================
-    # Display Results
-    # ======================================
+        similarities = similarities[0]
+        indices = indices[0]
 
-    if len(results) == 0:
+        valid_results = [
+            (int(i), float(score))
+            for i, score in zip(indices, similarities)
+            if i != -1 and score >= THRESHOLD
+        ]
 
-        st.warning(
-            "No sufficiently similar jewelry was found. "
-            "Try another image or lower the similarity threshold."
-        )
+        st.divider()
 
+        if len(valid_results) == 0:
+            st.warning(
+                "No similar jewelry was found above the similarity threshold."
+            )
 
-    else:
+        else:
+            st.subheader(f"✨ Similar Results ({len(valid_results)})")
 
-        st.subheader(
-            f"Top {len(results)} Similar Products"
-        )
+            cols = st.columns(5)
 
+            for rank, (image_index, score) in enumerate(valid_results):
 
-        columns = st.columns(
-            5
-        )
+                rel_path = str(image_paths[image_index])
+                full_path = os.path.join(PROJECT_DIR, rel_path)
 
+                if os.path.exists(full_path):
+                    result_image = Image.open(full_path).convert("RGB")
 
-        for position, (
-            similarity,
-            image_index
-        ) in enumerate(results):
+                    with cols[rank % 5]:
+                        st.image(
+                            result_image,
+                            caption=f"#{rank + 1} | Similarity: {score:.3f}",
+                            use_container_width=True
+                        )
 
-            with columns[
-                position % 5
-            ]:
-
-                # Get saved path
-                saved_path = image_paths[
-                    image_index
-                ]
-
-
-                # Find actual image
-                image_path = get_image_path(
-                    saved_path
-                )
-
-
-                # Image not found
-                if image_path is None:
-
-                    st.error(
-                        f"Image not found: {saved_path}"
-                    )
-
-                    continue
+else:
+    st.info("👆 Upload a jewelry image or use the camera to start searching.")
 
 
-                # Load and display image
-                try:
-
-                    result_image = Image.open(
-                        image_path
-                    ).convert(
-                        "RGB"
-                    )
-
-
-                    st.image(
-                        result_image,
-                        use_container_width=True
-                    )
-
-
-                    st.caption(
-                        f"Similarity: "
-                        f"{similarity:.3f}"
-                    )
-
-
-                except Exception as e:
-
-                    st.error(
-                        f"Could not load image: {e}"
-                    )
+st.divider()
+st.caption("Built using MobileNetV2, embeddings, FAISS, and Streamlit.")
