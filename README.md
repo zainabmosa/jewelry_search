@@ -1,36 +1,73 @@
 # 💎 Jewelry Visual Search Engine
 
-## 🚀 Live Demo
-
-🔗 **Streamlit App:**
-https://jewelrysearch1.streamlit.app/
-
 ## About the Project
 
-In this project, I built a visual search engine using the Tanishq Jewellery Dataset.
+In this project, I built a Jewelry Visual Search Engine using the **Tanishq Jewellery Dataset**.
 
-The user can upload a jewelry image, and the system finds visually similar jewelry from the dataset.
+The main idea is that the user can upload a jewelry image, and the system will find similar jewelry images from the dataset.
 
----
-
-## What I Used
-
-- MobileNetV2 for feature extraction
-- Transfer Learning
-- Image embeddings
-- FAISS for similarity search
-- Streamlit for the web application
+I used **MobileNetV2** to extract image features and **FAISS** to search for similar images.
 
 ---
 
-## How It Works
+## 🎯 Project Goal
 
-1. The images are loaded from the dataset.
-2. MobileNetV2 extracts an embedding from each image.
-3. The embeddings are saved.
-4. FAISS is used to search for similar images.
-5. The user uploads an image.
-6. The app shows the top similar results.
+The goal of this project is to create a simple visual search system.
+
+Instead of searching using text, the user can upload an image of jewelry, and the system will show visually similar items.
+
+---
+
+## 🔍 How It Works
+
+The project works in the following steps:
+
+1. Load the jewelry images.
+2. Use MobileNetV2 to extract features from each image.
+3. Convert the image features into embeddings.
+4. Save the embeddings and image paths.
+5. Create a FAISS index.
+6. Upload a query image.
+7. Search for similar jewelry images.
+8. Display the Top similar results.
+
+---
+
+## 🤖 Model Used
+
+I used **MobileNetV2** with pretrained weights.
+
+The classification layer was removed, and the model was used as a feature extractor.
+
+This allows the system to compare images based on their visual features.
+
+---
+
+## 🛠️ Technologies Used
+
+* Python
+* PyTorch
+* Torchvision
+* MobileNetV2
+* FAISS
+* NumPy
+* Pillow
+* Streamlit
+
+---
+
+## 🖥️ Streamlit Application
+
+I created a Streamlit application where the user can:
+
+* Upload a jewelry image
+* Use the camera to take a photo
+* Search for similar jewelry
+* View similar results from the dataset
+
+### 🚀 Try the App
+
+[Open Jewelry Visual Search App](https://jewelrysearch1.streamlit.app/?utm_source=chatgpt.com)
 
 ---
 
@@ -39,7 +76,7 @@ The user can upload a jewelry image, and the system finds visually similar jewel
 ```text
 jewelry_search/
 │
-├── jewelry_visual_search_student_style.ipynb
+├── jewelry_visual_search.ipynb
 ├── prepare_data.py
 ├── app.py
 ├── requirements.txt
@@ -54,21 +91,25 @@ jewelry_search/
 
 ---
 
-## ▶️ Run the Project
+## ⚙️ Installation
 
-First, install the required libraries:
+Install the required libraries:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-If you need to create the embeddings and FAISS index:
+---
+
+## ▶️ Running the Project
+
+First, prepare the data and create the embeddings:
 
 ```bash
 python prepare_data.py
 ```
 
-Then run the Streamlit app:
+Then run the Streamlit application:
 
 ```bash
 streamlit run app.py
@@ -76,24 +117,19 @@ streamlit run app.py
 
 ---
 
-## 🔍 Search Results
+## 🔎 Visual Search
 
-The app:
+The application uses the uploaded image as a query.
 
-- Lets the user upload an image or use the camera
-- Displays the uploaded image
-- Searches for the top 25 similar items
-- Uses a similarity threshold to avoid showing unrelated results
+The image is converted into an embedding using MobileNetV2.
 
----
+Then FAISS compares the query embedding with the saved embeddings and returns similar jewelry images.
 
-## 📊 Quality Check
-
-I also added a simple category-based Precision@5 check in the notebook.
+The system displays the **Top 25 similar results**.
 
 ---
 
 ## 👩‍💻 Author
 
-**Zainab Mohammed**  
+**Zainab Mohammed**
 **Data Science**
